@@ -1,0 +1,283 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "endpoint-ingestion"
+version = "2.1.0"
+description = "Standalone ingestion pipeline for Endpoint — fetches and normalizes content from Teams, Moodle, and Telegram"
+requires-python = ">=3.12"
+# Production deps: pinned with a compatible-release upper bound (``< (X+1)``)
+# so a major bump never lands silently on a Renovate / Dependabot patch run.
+# Dev-only deps below stay floating by intent — easier to keep tooling
+# current there. Dependabot is configured to ignore major bumps repo-wide
+# and to land patch + minor automatically; this pin pattern is its
+# safety rail.
+dependencies = [
+    "httpx>=0.27,<1",
+    "pydantic>=2.0,<3",
+    "pydantic-settings>=2.0,<3",
+    "pyjwt>=2.8,<3",
+]
+
+[project.scripts]
+ingest = "ingestion.cli.app:app"
+endpoint-admin = "ingestion.cli.admin:main"
+
+[project.optional-dependencies]
+cli = [
+    "typer>=0.9",
+    "rich>=13.0",
+    "questionary>=2.0",
+    "playwright>=1.40",
+]
+analysis = [
+    "ipykernel>=7.2.0",
+    "jupyter>=1.1.1",
+    "matplotlib>=3.10.8",
+    "numpy>=2.4.3",
+    "pandas>=3.0.1",
+    "seaborn>=0.13.2",
+]
+daemon = [
+    "db-core",
+    # Daemon-only production deps: same compatible-release pattern as the
+    # core ``dependencies`` list above. ``fastapi`` and ``uvicorn`` are
+    # the most active surface — keep both bounded so a 0.x major doesn't
+    # silently break on a transitive bump.
+    "structlog>=24.0,<26",
+    "cryptography>=42.0,<47",
+    "fastapi>=0.110,<1",
+    "uvicorn[standard]>=0.30,<1",
+    "aiosqlite>=0.20,<1",
+    # Playwright follows browser-version cadence; keep it loose so a
+    # security patch in a newer minor isn't blocked.
+    "playwright>=1.40",
+    "itsdangerous>=2.0,<3",
+    "sentry-sdk[fastapi]>=2.0,<3",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-django>=4.8",
+    # The metrics contract test validates our hand-rolled exposition with
+    # the real Prometheus parser, so keep the parser available in dev/test.
+    "prometheus-client>=0.24,<1",
+    "respx>=0.21",
+    "ruff>=0.4",
+    "pyright>=1.1",
+    "httpx>=0.27",
+    "aiohttp>=3.9",
+    "websockets>=12.0",
+    "psycopg[binary]>=3.2",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["ingestion"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+# Daemon-integration tests rely on db_core's Django setup. Non-Django tests
+# don't import core.models and are unaffected by Django being initialized.
+DJANGO_SETTINGS_MODULE = "config.settings"
+markers = [
+    "e2e: end-to-end tests that require a real daemon subprocess + Postgres (slow)",
+    "slow: tests that run for > ~1s (load tests, concurrency probes); opt-in via -m slow",
+    "snapshot: tests that pin a generated artefact (e.g. OpenAPI schema) and act as drift detectors; regenerate the artefact when these fail intentionally",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["ingestion"]
+# Utility scripts are intentionally out of the production quality gate.
+extend-exclude = ["scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "SIM", "TCH"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["TC001", "TC003", "N806"]
+# FastAPI resolves ``Annotated[..., Depends(...)]`` annotations at runtime,
+# so dependency-type imports can't live in a TYPE_CHECKING block.
+"ingestion/daemon/api/**" = ["TC001", "TC003"]
+# Typer reads ``Annotated[Path | None, typer.Option(...)]`` at runtime to
+# build the CLI parser; the same reasoning applies to the admin CLI as
+# to the FastAPI routers above.
+"ingestion/cli/admin*.py" = ["TC001", "TC003"]
+
+[tool.pyright]
+pythonVersion = "3.12"
+typeCheckingMode = "strict"
+include = ["ingestion"]
+exclude = ["tests"]
+extraPaths = ["../common/db_core"]
+
+
+# 1. Django ORM dynamism (Model.objects) without django-stubs.
+# 2. Strict-mode "Unknown" cascades from untyped dicts (credentials, cursors).
+reportAttributeAccessIssue = "none"
+reportUnknownMemberType = "none"
+reportUnknownVariableType = "none"
+reportUnknownArgumentType = "none"
+reportUnknownParameterType = "none"
+reportMissingTypeArgument = "none"
+reportMissingTypeStubs = "none"
+
+# Django ORM access patterns (``Model.objects.filter(...).aget()``) are
+# dynamic and pyright strict mode can't see through the metaclass injection.
+# db_core itself relaxes the same rules globally. Limit the relaxation to
+# daemon ports where we touch the ORM; the rest of the daemon stays strict.
+#
+# Slice 4 narrowed this list: ``reportMissingTypeStubs`` came off — the
+# ports layer no longer pulls in any stub-less third-party module.
+[[tool.pyright.executionEnvironments]]
+root = "ingestion/daemon/ports"
+# reportAttributeAccessIssue + reportUnknownMemberType +
+# reportUnknownVariableType + reportUnknownArgumentType: Django ORM is
+# fully untyped from pyright's view; every Model.objects.filter call
+# cascades into multiple "unknown" warnings. Adding django-stubs is the
+# real fix.
+reportAttributeAccessIssue = "none"
+reportUnknownMemberType = "none"
+reportUnknownVariableType = "none"
+reportUnknownArgumentType = "none"
+
+# Slice 12 lifecycle module touches PlatformCredential via the Django
+# ORM (``aiterator``, ``aupdate``) for the Fernet rotation pass.
+# Same dynamism as ``daemon/ports``; relax the same rules here.
+[[tool.pyright.executionEnvironments]]
+root = "ingestion/daemon/lifecycle"
+reportAttributeAccessIssue = "none"
+reportUnknownMemberType = "none"
+reportUnknownVariableType = "none"
+reportUnknownArgumentType = "none"
+
+# The scheduler consumes pre-existing ``ingestion.ports`` Protocols whose
+# ``dict`` params lack type arguments. Changing those is a cross-cutting
+# contract change; relax these so the scheduler can compose them without
+# noisy casts.
+#
+# Slice 4 narrowed this list: ``reportUnknownArgumentType`` came off — the
+# call sites that needed it have been retyped via the credential port
+# Protocol that lifted in slice 2.
+[[tool.pyright.executionEnvironments]]
+root = "ingestion/daemon/scheduler.py"
+# reportUnknownVariableType + reportUnknownMemberType: cascades from
+# ``run_sync(..., credentials: dict)`` in ``ingestion.pipeline`` —
+# typing the Protocol's dict params is a cross-cutting change.
+reportUnknownVariableType = "none"
+reportUnknownMemberType = "none"
+
+# The auth package consumes the same dict-untyped Protocols and touches
+# Playwright (third-party library with shapes that don't cleanly match our
+# own TypedDicts for cookie payloads).
+#
+# Slice 4 narrowed this list: ``reportArgumentType`` and
+# ``reportAssignmentType`` came off — Playwright is now invoked through
+# narrower Protocol-typed wrappers in this slice's vicinity, so the auth
+# layer no longer needs those concessions.
+[[tool.pyright.executionEnvironments]]
+root = "ingestion/daemon/auth"
+# reportUnknownVariableType + reportUnknownMemberType + reportUnknownArgumentType:
+# the Protocol surface in ``ingestion.ports`` declares ``credentials:
+# dict`` without type arguments; every binding cascades into "unknown"
+# warnings. Fixing this means typing the Protocol, which is a
+# cross-cutting contract change deferred to a later slice.
+reportUnknownVariableType = "none"
+reportUnknownMemberType = "none"
+reportUnknownArgumentType = "none"
+
+# The API package touches Django async ORM and FastAPI's dynamically-typed
+# dependency injection surface (Cookie, Depends, app.state).
+#
+# Slice 4 narrowed this list: ``reportAssignmentType`` came off after the
+# router-level dict-literal returns were typed via Pydantic models. The
+# remaining suppressions are documented inline so the next slice can pick
+# off another one when the underlying source of dynamism is fixed.
+[[tool.pyright.executionEnvironments]]
+root = "ingestion/daemon/api"
+# reportAttributeAccessIssue: Django ORM ``Model.objects`` is metaclass-
+# injected; pyright strict mode can't see through it without django-stubs.
+reportAttributeAccessIssue = "none"
+# reportUnknownMemberType + reportUnknownVariableType + reportUnknownArgumentType:
+# QuerySet operations (filter / aiterator / aget) return Unknown without
+# django-stubs.
+reportUnknownMemberType = "none"
+reportUnknownVariableType = "none"
+reportUnknownArgumentType = "none"
+# reportArgumentType: ws.py passes WebSocket into get_context (typed for
+# Request); both share the .app.state shape but the types are siblings.
+reportArgumentType = "none"
+# reportMissingTypeStubs: aiosqlite has no stubs; emitted on every import.
+reportMissingTypeStubs = "none"
+
+# The admin CLI consumes raw JSON from the daemon's HTTP API and Typer's
+# ``ctx.obj`` bag, both of which are dict[str, Any] from pyright's view.
+# We narrow with isinstance checks at every boundary, but pyright doesn't
+# track those through .get() chains; the same dict-Unknown cascade we
+# allow in ``daemon/api`` applies here.
+[[tool.pyright.executionEnvironments]]
+root = "ingestion/cli/admin.py"
+reportUnknownMemberType = "none"
+reportUnknownVariableType = "none"
+reportUnknownArgumentType = "none"
+
+[[tool.pyright.executionEnvironments]]
+root = "ingestion/cli/admin_debug.py"
+reportUnknownMemberType = "none"
+reportUnknownVariableType = "none"
+reportUnknownArgumentType = "none"
+
+# The service layer wraps both the Django ORM (``purge_item``, refresh)
+# and the dict-untyped pipeline Protocols (``dry_run_sync`` consumes
+# ``run_sync``).
+#
+# Slice 4 narrowed this list: ``reportUnknownArgumentType``,
+# ``reportArgumentType``, ``reportAssignmentType``, and
+# ``reportMissingTypeStubs`` came off after the routers above were typed
+# (services only see typed arguments now). The remaining suppressions
+# track ORM and pipeline-Protocol dynamism that needs upstream stubs to
+# resolve.
+[[tool.pyright.executionEnvironments]]
+root = "ingestion/daemon/services"
+# reportAttributeAccessIssue: Django ORM ``Model.objects`` /
+# ``Model.DoesNotExist`` are metaclass-injected; pyright can't see them
+# without django-stubs (out of slice scope to add).
+reportAttributeAccessIssue = "none"
+# reportUnknownMemberType + reportUnknownVariableType: ``run_sync`` from
+# ``ingestion.pipeline`` carries a ``dict`` Protocol param without type
+# arguments; cascades into "partially unknown" warnings on every binding
+# of its credentials / payload values inside dry_run_sync + purge_item.
+reportUnknownMemberType = "none"
+reportUnknownVariableType = "none"
+
+[tool.uv.sources]
+db-core = { path = "../common/db_core", editable = true }
+
+[dependency-groups]
+dev = [
+    "db-core",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-django>=4.8",
+    "prometheus-client>=0.24,<1",
+    "respx>=0.21",
+    "typer>=0.9",
+    "rich>=13.0",
+    "questionary>=2.0",
+    "aiohttp>=3.9",
+    "websockets>=12.0",
+    "psycopg[binary]>=3.2",
+    "structlog>=24.0,<26",
+    "cryptography>=42.0,<47",
+    "fastapi>=0.110,<1",
+    "uvicorn[standard]>=0.30,<1",
+    "aiosqlite>=0.20,<1",
+    "playwright>=1.40",
+    "itsdangerous>=2.0,<3",
+    "sentry-sdk[fastapi]>=2.0,<3",
+    "PyYAML>=6",
+    "pytest-cov>=7.0.0",
+]

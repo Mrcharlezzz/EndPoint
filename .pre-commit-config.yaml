@@ -1,0 +1,81 @@
+# Slice 15 part C: pre-commit hooks for repo-wide hygiene.
+#
+# Install once per clone with:
+#   pre-commit install
+#
+# Hooks run on every ``git commit`` against the staged change set. The
+# expensive type-checker is parked in a manual stage so an everyday
+# commit doesn't pay its ~5s cost; run it before pushing with:
+#   pre-commit run --hook-stage manual pyright
+#
+# The gitleaks hook reuses the same .gitleaks.toml allowlist that the
+# CI secret-scan workflow consumes (slice 14), so behaviour is
+# consistent between the local commit gate and the CI gate.
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      # Strips trailing whitespace; keeps diffs noise-free.
+      - id: trailing-whitespace
+      # Enforces final newline; required by ruff format and many
+      # POSIX tools (cat, sort) so we land it pre-commit too.
+      - id: end-of-file-fixer
+      # Catches YAML syntax errors before CI sees them. The ingestion
+      # CI workflow itself parses cleanly so this runs against it too.
+      - id: check-yaml
+        # Allow GitHub Actions YAML to use ``!!`` resolver tags if
+        # we ever reach for them (none today, but flag is cheap).
+        args: ["--unsafe"]
+      # Catches malformed JSON before it ships. The OpenAPI snapshot
+      # at docs/ingestion/openapi.json is large but plain JSON; the
+      # hook is fast on it.
+      - id: check-json
+      # Catches malformed TOML — pyproject.toml is the obvious target.
+      - id: check-toml
+      # Refuses commits that still contain Git conflict markers (``<<<<``).
+      - id: check-merge-conflict
+      # Refuses commits that contain ``breakpoint()`` / ``pdb.set_trace()``.
+      # Easy to leave behind during debugging; this is the cheapest way
+      # to catch one before review.
+      - id: debug-statements
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    # Pin a specific tag so a compromised ``main`` of the action repo
+    # cannot silently run different code on every developer's machine.
+    rev: v0.7.0
+    hooks:
+      # Lint with ruff. ``--fix`` is intentionally NOT enabled on the
+      # commit hook: silent autofix changes the diff under the
+      # developer's feet. CI runs the same rules without --fix.
+      - id: ruff
+      # Format with ruff. Replaces black + isort across the repo.
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/mirrors-pyright
+    rev: v1.1.380
+    hooks:
+      - id: pyright
+        # Park pyright in the manual stage. It runs in CI on every
+        # PR, but locally we don't want to pay ~5s for it on every
+        # ``git commit``. Run via:
+        #   pre-commit run --hook-stage manual pyright
+        stages: [manual]
+        # Limit to the ingestion package — the global pyright config
+        # in src/ingestion/pyproject.toml owns the strict-mode rules
+        # and per-subpackage execution environments.
+        files: ^src/ingestion/ingestion/
+        # The hook's default run command is ``pyright``; pass our
+        # working directory so the subpackage execution environments
+        # in pyproject.toml are honoured.
+        args: ["--project", "src/ingestion"]
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.0
+    hooks:
+      - id: gitleaks
+        # Reuse the repo-wide allowlist that the CI secret-scan
+        # workflow already consumes. Single source of truth means a
+        # placeholder accepted in CI is also accepted locally; a
+        # real secret blocked here is also blocked there.
+        args: ["--config", ".gitleaks.toml"]

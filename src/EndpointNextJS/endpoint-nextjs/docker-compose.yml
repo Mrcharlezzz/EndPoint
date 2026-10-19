@@ -1,0 +1,34 @@
+# Endpoint Next.js in Docker + optional ngrok sidecar.
+#
+# 1) Build & run app only (http://localhost:3000):
+#    docker compose up --build web
+#
+# 2) Run app + ngrok tunnel (public URL printed in ngrok logs; inspector http://localhost:4040):
+#    cp compose.ngrok.env.example .env   # then paste NGROK_AUTHTOKEN from https://dashboard.ngrok.com/get-started/your-authtoken
+#    docker compose --profile tunnel up --build
+#
+# Firebase: add your ngrok hostname under Authentication → Settings → Authorized domains.
+
+services:
+  web:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+
+  ngrok:
+    profiles: ["tunnel"]
+    image: ngrok/ngrok:latest
+    depends_on:
+      - web
+    restart: unless-stopped
+    environment:
+      # Required when using profile `tunnel`; ignored for `docker compose up web` alone.
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+    command:
+      - http
+      - --log=stdout
+      - web:3000
+    ports:
+      - "4040:4040"

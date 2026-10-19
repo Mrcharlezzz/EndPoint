@@ -1,0 +1,102 @@
+# Gitleaks configuration for the Endpoint repo.
+#
+# Slice 14 part C. This config extends the default ruleset (loaded with
+# `useDefault = true`) and layers an allowlist that exempts intentional
+# placeholders shipped in `.env.example`, the dev-only compose defaults
+# in `docker-compose.yml`, and example tokens used in tests / docs.
+#
+# The CI workflow `.github/workflows/secret-scan.yml` runs gitleaks
+# against the full git history (`--redact --no-banner`) so a secret
+# accidentally landed in an old commit is caught even after a force-
+# fixup. Adding a new allowlisted value here is fine for placeholders;
+# do NOT add allowlist entries for actual secrets that have leaked —
+# rotate them instead.
+
+title = "Endpoint gitleaks config"
+
+# Inherit gitleaks' built-in detector ruleset (Slack tokens, AWS keys,
+# GCP service-account keys, GitHub PATs, etc.). The custom allowlist
+# below applies on top.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Endpoint placeholder allowlist"
+
+# Files where the only secret-shaped strings are intentional
+# placeholders (.env.example empty values, docker-compose.yml dev
+# defaults, test fixtures with synthetic credentials).
+paths = [
+    # Public templates — placeholder values only.
+    '''^\.env\.example$''',
+    '''^\.gitleaks\.toml$''',
+
+    # Dev-only compose defaults for profile-gated services
+    # (GlitchTip + PostHog). Documented in the file itself; they're
+    # weak by design so single-developer `docker compose up` works.
+    '''^docker-compose\.yml$''',
+
+    # Test fixtures + integration test files: the daemon test suite
+    # uses synthetic Fernet keys, fake JWTs, and example admin
+    # passwords throughout. These are never committed as production
+    # material; rotating them isn't a "rotate the leaked secret"
+    # response, it's a "regenerate the test fixture" task.
+    '''^src/ingestion/tests/.*''',
+    '''^src/backend/presentation-api/tests/.*''',
+    '''^src/common/db_core/tests/.*''',
+
+    # Auto-generated lockfiles. Modern lockfiles can carry hashes that
+    # tickle entropy heuristics; lockfile churn shouldn't gate CI.
+    '''^.*/uv\.lock$''',
+    '''^.*/package-lock\.json$''',
+    '''^.*/pnpm-lock\.yaml$''',
+    '''^.*/yarn\.lock$''',
+
+    # Docs that demonstrate API shapes with example values.
+    '''^docs/.*\.md$''',
+
+    # The seed scripts use deterministic GlitchTip / PostHog
+    # bootstrap tokens that match the .env.example placeholders.
+    '''^scripts/.*''',
+
+    # Migrations occasionally embed sample bcrypt hashes used as
+    # initial-admin seeds; they're hashed not plaintext, but
+    # gitleaks' generic-password rule trips on them.
+    '''.*/migrations/.*\.py$''',
+]
+
+# Specific value-level allowlist for placeholders that may appear
+# in checked-in source (banner ASCII, docs samples, etc.). These
+# patterns match the WHOLE matched text gitleaks reports, anchored
+# loosely so a slightly-different placeholder still hits.
+regexes = [
+    # The deterministic GlitchTip / PostHog public-key UUIDs we
+    # bootstrap (00000000-0000-4000-8000-00000000000X). These are
+    # public DSN identifiers, not secrets, but their DSN form
+    # (32 zero hex chars) tickles entropy heuristics.
+    '''00000000000040008000000000000\d{3}''',
+    # The placeholder PostHog dev token shipped in .env.example.
+    '''phc_endpointlocaldev0+''',
+    # Common placeholder strings used across .env.example + compose
+    # defaults. These are obviously-not-real markers, not credentials.
+    '''change-me(-[a-z-]+)?''',
+    '''your_api_key''',
+    '''endpoint-admin-dev''',
+]
+
+# Specific commits that carried allowed-by-policy placeholders before
+# this config landed. Add SHAs here only after confirming the diff
+# really is benign (paste-bin examples, doc fixtures, etc.). Empty
+# by default; gitleaks rejects unknown SHA strings here.
+commits = []
+
+# Stopwords gitleaks uses to suppress per-rule false positives. Keep
+# the default plus a short list of words that appear in our docs
+# alongside what looks like a token (`example`, `placeholder`, etc.).
+stopwords = [
+    "example",
+    "placeholder",
+    "redacted",
+    "fixture",
+    "sample",
+]

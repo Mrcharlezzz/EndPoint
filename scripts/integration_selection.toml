@@ -1,0 +1,18 @@
+# SYNTHETIC EXAMPLE scenarios for public source review.
+# Replace locally with private course selections before using real data.
+
+[scenarios.demo_curated]
+description = "SYNTHETIC EXAMPLE course selection"
+[[scenarios.demo_curated.include]]
+course_name = ["SYNTHETIC EXAMPLE COURSE"]
+platform = ["moodle", "teams"]
+content_type = ["assignment"]
+limit = 3
+
+[scenarios.demo_course_latest]
+description = "SYNTHETIC EXAMPLE recent messages"
+[[scenarios.demo_course_latest.include]]
+course_name = ["SYNTHETIC EXAMPLE COURSE"]
+platform = ["teams"]
+content_type = ["raw_message"]
+limit = 3

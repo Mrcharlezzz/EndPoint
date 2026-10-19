@@ -1,0 +1,33 @@
+# syntax=docker/dockerfile:1.6
+#
+# Build context is the repo root.
+#
+#   docker build -f docker/Dockerfile.dashboard -t endpoint/dashboard .
+#   docker compose up dashboard
+
+ARG NODE_VERSION=22
+ARG NGINX_VERSION=1.27
+
+FROM node:${NODE_VERSION}-alpine AS build
+
+RUN corepack enable
+
+WORKDIR /app
+
+COPY src/ingestion/dashboard/package.json        /app/package.json
+COPY src/ingestion/dashboard/pnpm-lock.yaml      /app/pnpm-lock.yaml
+COPY src/ingestion/dashboard/pnpm-workspace.yaml /app/pnpm-workspace.yaml
+
+RUN pnpm install --frozen-lockfile
+
+COPY src/ingestion/dashboard /app
+
+RUN pnpm build
+
+
+FROM nginx:${NGINX_VERSION}-alpine AS runtime
+
+COPY docker/nginx/default.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/dist /usr/share/nginx/html
+
+EXPOSE 80

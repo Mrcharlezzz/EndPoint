@@ -1,0 +1,206 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+ENV_FILE="${DEMO_ENV_FILE:-$REPO_ROOT/.env}"
+SNAPSHOT_DIR="${DEMO_SNAPSHOT_DIR:-$REPO_ROOT/data/snapshots/post-process}"
+
+usage() {
+    cat >&2 <<'EOF'
+usage: scripts/demo
+
+Boot the full local demo stack from the current post-process snapshot.
+
+The script:
+  1. validates .env and local credential prerequisites
+  2. tears down the current compose stack
+  3. starts the stack again without --build
+  4. waits for the snapshot restore, CLI-token import, and runtime services
+
+Override the env file for testing with:
+  DEMO_ENV_FILE=/path/to/.env scripts/demo
+EOF
+}
+
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+    usage
+    exit 0
+fi
+
+if [[ "$#" -ne 0 ]]; then
+    usage
+    exit 2
+fi
+
+if [[ ! -f "$ENV_FILE" ]]; then
+    echo "error: env file not found: $ENV_FILE" >&2
+    exit 2
+fi
+
+if ! compgen -G "$SNAPSHOT_DIR/*.sql.gz" >/dev/null; then
+    echo "error: no post-process snapshots found under $SNAPSHOT_DIR" >&2
+    exit 2
+fi
+
+set -a
+# shellcheck disable=SC1090
+source "$ENV_FILE"
+set +a
+
+if [[ -z "${PRESENTATION_API_SECRET_KEY:-}" && -n "${SECRET_KEY:-}" ]]; then
+    export PRESENTATION_API_SECRET_KEY="$SECRET_KEY"
+    echo "[demo] PRESENTATION_API_SECRET_KEY not set in $ENV_FILE; using SECRET_KEY for this run"
+fi
+
+required_vars=(
+    POSTGRES_DB
+    POSTGRES_USER
+    POSTGRES_PASSWORD
+    ENDPOINT_FERNET_KEY
+    ENDPOINT_ADMIN_PASSWORD
+    ENDPOINT_SESSION_SECRET
+    ENDPOINT_HEADLESS__INTERNAL_SECRET
+    PRESENTATION_API_SECRET_KEY
+)
+
+missing_vars=()
+for var_name in "${required_vars[@]}"; do
+    if [[ -z "${!var_name:-}" ]]; then
+        missing_vars+=("$var_name")
+    fi
+done
+
+if (( ${#missing_vars[@]} > 0 )); then
+    printf 'error: missing required env vars in %s: %s\n' \
+        "$ENV_FILE" "${missing_vars[*]}" >&2
+    exit 2
+fi
+
+credentials_file="$HOME/.config/ingest/credentials.json"
+if [[ ! -f "$credentials_file" ]]; then
+    echo "error: CLI credentials file not found: $credentials_file" >&2
+    echo "       required by compose service import-cli-tokens" >&2
+    exit 2
+fi
+
+compose() {
+    docker compose --env-file "$ENV_FILE" "$@"
+}
+
+wait_for_health() {
+    local service="$1"
+    local timeout_seconds="$2"
+    local cid=""
+    local status=""
+    local elapsed=0
+
+    echo -n "[demo] waiting for $service to become healthy"
+
+    while (( elapsed < timeout_seconds )); do
+        cid="$(compose ps -q "$service" 2>/dev/null || true)"
+        if [[ -n "$cid" ]]; then
+            status="$(docker inspect -f '{{.State.Health.Status}}' "$cid" 2>/dev/null || true)"
+            if [[ "$status" == "healthy" ]]; then
+                echo " ✓"
+                return 0
+            fi
+        fi
+        echo -n "."
+        sleep 2
+        elapsed=$((elapsed + 2))
+    done
+
+    echo
+    echo "error: $service did not become healthy within ${timeout_seconds}s" >&2
+    compose ps "$service" >&2 || true
+    return 1
+}
+
+wait_for_running() {
+    local service="$1"
+    local timeout_seconds="$2"
+    local cid=""
+    local status=""
+    local elapsed=0
+
+    echo -n "[demo] waiting for $service to be running"
+
+    while (( elapsed < timeout_seconds )); do
+        cid="$(compose ps -q "$service" 2>/dev/null || true)"
+        if [[ -n "$cid" ]]; then
+            status="$(docker inspect -f '{{.State.Status}}' "$cid" 2>/dev/null || true)"
+            if [[ "$status" == "running" ]]; then
+                echo " ✓"
+                return 0
+            fi
+        fi
+        echo -n "."
+        sleep 2
+        elapsed=$((elapsed + 2))
+    done
+
+    echo
+    echo "error: $service did not reach running state within ${timeout_seconds}s" >&2
+    compose ps "$service" >&2 || true
+    return 1
+}
+
+wait_for_successful_exit() {
+    local service="$1"
+    local timeout_seconds="$2"
+    local cid=""
+    local status=""
+    local exit_code=""
+    local elapsed=0
+
+    echo -n "[demo] waiting for $service to finish"
+
+    while (( elapsed < timeout_seconds )); do
+        cid="$(compose ps -aq "$service" 2>/dev/null || true)"
+        if [[ -n "$cid" ]]; then
+            status="$(docker inspect -f '{{.State.Status}}' "$cid" 2>/dev/null || true)"
+            exit_code="$(docker inspect -f '{{.State.ExitCode}}' "$cid" 2>/dev/null || true)"
+            if [[ "$status" == "exited" && "$exit_code" == "0" ]]; then
+                echo " ✓"
+                return 0
+            fi
+        fi
+        echo -n "."
+        sleep 2
+        elapsed=$((elapsed + 2))
+    done
+
+    echo
+    echo "error: $service did not complete successfully within ${timeout_seconds}s" >&2
+    compose ps "$service" >&2 || true
+    return 1
+}
+
+cd "$REPO_ROOT"
+
+echo "[demo] resetting compose stack without rebuilding images..."
+compose down --remove-orphans
+
+echo "[demo] starting demo stack..."
+compose up -d
+
+wait_for_health db 60
+wait_for_successful_exit migrate 120
+wait_for_successful_exit seed-post-process-snapshot 120
+wait_for_successful_exit import-cli-tokens 120
+wait_for_running processor 60
+wait_for_health headless 90
+wait_for_health presentation-api 90
+wait_for_health daemon 120
+wait_for_health frontend 120
+
+cat <<'EOF'
+[demo] stack ready
+[demo] frontend:         http://localhost:3000
+[demo] presentation-api: http://localhost:8001
+[demo] headless:         http://localhost:8000
+[demo] daemon dashboard: http://localhost:4173
+
+[demo] use a fresh browser session for the real login flow.
+EOF

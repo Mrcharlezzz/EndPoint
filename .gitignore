@@ -1,0 +1,152 @@
+# ========================
+# Virtual environments
+# ========================
+.venv/
+venv/
+env/
+ENV/
+
+# ========================
+# Environment & secrets
+# ========================
+.env
+.env.*
+!.env.example
+!.env.telegram-bootstrap.example
+
+# Private project data and evaluation material
+data/
+src/processor/evaluation/telegram_llm/*.csv
+src/processor/artifacts/
+docs/local/
+*.sql.gz
+*.json.gz
+*.session
+*.pem
+*.p12
+*.pfx
+
+# ========================
+# IDE & editors
+# ========================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# ========================
+# Obsidian
+# ========================
+docs/.obsidian/
+.ruff_cache/
+
+# ========================
+# OS files
+# ========================
+.DS_Store
+**/.DS_Store
+Thumbs.db
+desktop.ini
+
+# ========================
+# Django
+# ========================
+*.sqlite3
+db.sqlite3
+media/
+staticfiles/
+static_collected/
+
+# ========================
+# Testing & coverage
+# ========================
+htmlcov/
+.coverage
+.coverage.*
+.tox/
+.nox/
+.pytest_cache/
+nosetests.xml
+coverage.xml
+*.cover
+src/processor/artifacts/
+
+# ========================
+# Mypy / type checking
+# ========================
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# ========================
+# Logs
+# ========================
+*.log
+logs/
+
+# ========================
+# Project-specific (ingestion)
+# ========================
+scripts/tg_session*
+scripts/.ipynb_checkpoints/
+scripts/*.json
+scripts/outputs/
+scripts/*.txt
+scripts/*.ipynb
+
+# ========================
+# Conduct v2 / EFA (personal)
+# ========================
+.conduct/
+.orchestrator/
+.claude/settings.json
+project-standards.md
+prompt-patterns.md
+Justfile
+
+# ========================
+# Playwright e2e artifacts
+# ========================
+playwright-report/
+test-results/
+
+# ========================
+# Build artefacts (Python)
+# ========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+
+# ========================
+# Build artefacts (Node / Next)
+# ========================
+node_modules/
+.next/
+out/
+.turbo/
+
+# ========================
+# Claude Code session dir
+# ========================
+.claude/
+
+# ========================
+# Snapshots & runs (dev processor flow)
+# ========================
+data/snapshots/**/*.sql.gz
+data/snapshots/**/*.dump
+data/runs/*/
+!data/runs/.gitkeep
+!data/snapshots/**/.gitkeep
+!data/snapshots/README.md
+
+
+# Generated evaluation outputs may contain private messages.
+src/ingestion/scripts/benchmark_results.json
+src/ingestion/scripts/gold_labels.json
+src/processor/evaluation/**/*.jsonl

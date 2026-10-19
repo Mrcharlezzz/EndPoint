@@ -1,0 +1,1191 @@
+/* Onboarding shell — full-screen flow.
+   Ported from the design reference (project/onboarding.css). Used by both
+   the /login wizard (welcome → moodle → teams) and the /onboarding wizard
+   (courses → prefs). */
+
+/* ── Stage shell ──────────────────────────────────────── */
+
+.onboarding-stage {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: onb-fade 0.25s ease-out;
+}
+
+@keyframes onb-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.onboarding-bg {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      ellipse 80% 60% at 20% 10%,
+      oklch(from var(--accent) l c h / 0.1),
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 70% 50% at 90% 90%,
+      oklch(from var(--accent) l c h / 0.06),
+      transparent 60%
+    );
+  pointer-events: none;
+  --onb-dot-color: oklch(0.55 0.005 240 / 0.35);
+}
+
+[data-theme="dark"] .onboarding-bg {
+  background:
+    radial-gradient(
+      ellipse 80% 60% at 20% 10%,
+      oklch(from var(--accent) l c h / 0.18),
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 70% 50% at 90% 90%,
+      oklch(from var(--accent) l c h / 0.1),
+      transparent 60%
+    );
+  --onb-dot-color: oklch(0.7 0.008 240 / 0.4);
+}
+
+/* Dotted overlay with a centre cutout — dots are visible toward the
+   screen edges and fade to nothing where the form card sits. The mask
+   is the inverse of what you'd think: `transparent` in the gradient
+   means "hidden by the mask", a solid colour means "show the layer". */
+.onboarding-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(var(--onb-dot-color) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: 0 0;
+  -webkit-mask-image: radial-gradient(
+    ellipse 55% 60% at 50% 50%,
+    transparent 0%,
+    oklch(0 0 0 / 0.55) 50%,
+    oklch(0 0 0 / 1) 100%
+  );
+  mask-image: radial-gradient(
+    ellipse 55% 60% at 50% 50%,
+    transparent 0%,
+    oklch(0 0 0 / 0.55) 50%,
+    oklch(0 0 0 / 1) 100%
+  );
+}
+
+.onboarding-header {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 18px 28px;
+  border-bottom: 1px solid var(--border);
+  background: oklch(from var(--bg) l c h / 0.7);
+  backdrop-filter: blur(8px);
+}
+
+.onboarding-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  font-size: 15px;
+}
+
+/* The header mark is a downscaled version of the welcome hero orbits.
+   Same orbital motif, same accent color, just shrunk to ~22px so the
+   navbar reads cleanly at body type size. */
+.onboarding-brand-mark {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.onboarding-brand-mark::before,
+.onboarding-brand-mark::after {
+  content: "";
+  position: absolute;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  opacity: 0.35;
+}
+
+.onboarding-brand-mark::before {
+  inset: 0;
+}
+
+.onboarding-brand-mark::after {
+  inset: 3px;
+  transform: rotate(60deg) scale(0.85);
+}
+
+.onboarding-brand-mark > span {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px oklch(from var(--accent) l c h / 0.18);
+  position: relative;
+  z-index: 1;
+}
+
+.onboarding-progress {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+  max-width: 420px;
+}
+
+.onboarding-progress-track {
+  flex: 1;
+  height: 4px;
+  background: var(--bg-sunken);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.onboarding-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.onboarding-step-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.onboarding-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.theme-toggle {
+  appearance: none;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+}
+
+.theme-toggle:hover {
+  background: var(--bg-sunken);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.theme-toggle-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* ── Frame + slide animations ─────────────────────────── */
+
+.onboarding-frame {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 32px 24px;
+  overflow-y: auto;
+}
+
+.onboarding-screen {
+  width: 100%;
+  max-width: 720px;
+  display: flex;
+  justify-content: center;
+}
+
+.onboarding-screen--in-right {
+  animation: onb-slide-in-r 0.32s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.onboarding-screen--in-left {
+  animation: onb-slide-in-l 0.32s cubic-bezier(0.2, 0, 0, 1);
+}
+
+@keyframes onb-slide-in-r {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes onb-slide-in-l {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* ── Card ─────────────────────────────────────────────── */
+
+.onboarding-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 36px 40px;
+  width: 100%;
+  max-width: 640px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow:
+    0 1px 2px oklch(0.2 0.02 240 / 0.04),
+    0 12px 32px -16px oklch(0.2 0.02 240 / 0.12);
+}
+
+.onboarding-card > * {
+  width: 100%;
+}
+
+[data-theme="dark"] .onboarding-card {
+  box-shadow:
+    0 1px 2px oklch(0 0 0 / 0.3),
+    0 16px 40px -16px oklch(0 0 0 / 0.5);
+}
+
+.onboarding-card--narrow {
+  max-width: 460px;
+}
+
+.onboarding-title {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0 0 6px;
+  line-height: 1.2;
+}
+
+.onboarding-tagline {
+  font-size: 16px;
+  color: var(--accent);
+  font-weight: 500;
+  margin: 0 0 14px;
+  letter-spacing: -0.01em;
+}
+
+.onboarding-blurb {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.55;
+  margin: 0 0 24px;
+}
+
+.onboarding-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 28px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.connect-perms {
+  text-align: left;
+}
+
+/* Button rules live in styles/buttons.css (loaded globally via globals.css)
+   so every route — auth, onboarding, settings, dashboard — has them. */
+
+@keyframes tg-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Footer dots ──────────────────────────────────────── */
+
+.onboarding-footer {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  padding: 18px;
+}
+
+.onboarding-dots {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.onboarding-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  transition:
+    background 0.2s,
+    width 0.2s;
+}
+
+.onboarding-dot[data-done="true"] {
+  background: var(--accent);
+  opacity: 0.5;
+}
+
+.onboarding-dot[data-on="true"] {
+  background: var(--accent);
+  width: 18px;
+}
+
+/* ── Welcome hero ─────────────────────────────────────── */
+
+.onboarding-hero-mark {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 20px;
+  display: grid;
+  place-items: center;
+}
+
+.hero-orbits {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+}
+
+.hero-orbits .orbit {
+  position: absolute;
+  border: 1.5px solid var(--accent);
+  border-radius: 999px;
+  opacity: 0.25;
+  inset: 0;
+}
+
+.hero-orbits .orbit-1 {
+  transform: rotate(0deg);
+  inset: 0;
+}
+
+.hero-orbits .orbit-2 {
+  transform: rotate(60deg) scale(0.85);
+}
+
+.hero-orbits .orbit-3 {
+  transform: rotate(120deg) scale(0.7);
+}
+
+.hero-orbits .hero-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--accent);
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 0 0 4px oklch(from var(--accent) l c h / 0.18);
+}
+
+/* ── Connect platform screens ─────────────────────────── */
+
+.connect-platform-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 18px;
+  background: var(--bg-sunken);
+  color: var(--text);
+  font-weight: 600;
+  font-size: 22px;
+}
+
+.connect-platform-icon[data-platform="moodle"] {
+  background: oklch(0.95 0.07 35);
+  color: oklch(0.45 0.13 35);
+}
+
+.connect-platform-icon[data-platform="teams"] {
+  background: oklch(0.95 0.06 268);
+  color: oklch(0.45 0.13 268);
+}
+
+[data-theme="dark"] .connect-platform-icon[data-platform="moodle"] {
+  background: oklch(0.32 0.08 35);
+  color: oklch(0.85 0.12 35);
+}
+
+[data-theme="dark"] .connect-platform-icon[data-platform="teams"] {
+  background: oklch(0.32 0.08 268);
+  color: oklch(0.85 0.12 268);
+}
+
+.connect-perms {
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin: 0 0 22px;
+}
+
+.perms-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin: 0 0 10px;
+}
+
+.connect-perms ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.connect-perms li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.connect-perms li svg,
+.connect-perms li .check {
+  color: var(--green);
+  flex-shrink: 0;
+}
+
+.connect-state {
+  min-height: 48px;
+}
+
+.connect-state .btn-primary {
+  width: 100%;
+  justify-content: center;
+}
+
+.connect-spinner-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13.5px;
+  color: var(--text-muted);
+}
+
+.connect-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--accent);
+  border-radius: 999px;
+  animation: connect-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes connect-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.connect-success {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--green-soft);
+  border: 1px solid oklch(from var(--green) l c h / 0.25);
+  border-radius: var(--radius-sm);
+}
+
+.success-check {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--green);
+  color: white;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  font-weight: 700;
+}
+
+.success-title {
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--green);
+}
+
+[data-theme="dark"] .success-title {
+  color: oklch(0.85 0.13 155);
+}
+
+.success-sub {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.connect-error {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--red);
+  background: var(--red-soft);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+}
+
+/* ── Modal (Moodle form + Teams canvas) ───────────────── */
+
+.auth-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: oklch(0 0 0 / 0.55);
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  z-index: 200;
+  animation: onb-fade 0.18s ease-out;
+}
+
+.auth-modal {
+  background: var(--surface);
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  box-shadow:
+    0 1px 2px oklch(0 0 0 / 0.08),
+    0 24px 48px -12px oklch(0 0 0 / 0.35);
+  padding: 22px;
+  width: 100%;
+  max-width: 460px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.auth-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.auth-modal-header h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.auth-modal-status {
+  margin: 3px 0 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+.auth-modal-close {
+  appearance: none;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  padding: 5px 10px;
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.auth-modal-close:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+/* ── Form fields ──────────────────────────────────────── */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.field span {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.field input {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text);
+  outline: none;
+  transition:
+    border-color 0.12s,
+    box-shadow 0.12s;
+}
+
+.field input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px oklch(from var(--accent) l c h / 0.15);
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.auth-form .btn-primary {
+  margin-top: 6px;
+  justify-content: center;
+}
+
+.auth-form-error {
+  margin: 0;
+  color: var(--red);
+  font-size: 12.5px;
+  background: var(--red-soft);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+}
+
+/* ── Teams canvas (inside modal) ──────────────────────── */
+
+.teams-login-canvas {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: oklch(0.1 0 0);
+  touch-action: none;
+}
+
+.teams-login-canvas canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  cursor: default;
+}
+
+.teams-login-canvas input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  pointer-events: none;
+  font-size: 16px;
+}
+
+.teams-login-overlay {
+  position: absolute;
+  inset: 0;
+  background: oklch(0.1 0 0 / 0.85);
+  color: var(--text);
+  display: grid;
+  place-items: center;
+  gap: 1rem;
+  text-align: center;
+  padding: 1rem;
+}
+
+.teams-login-overlay p {
+  margin: 0;
+  color: oklch(0.95 0 0);
+  font-size: 0.9rem;
+}
+
+/* ── Telegram screen ──────────────────────────────────── */
+
+.tg-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 0 4px;
+}
+
+.tg-toolbar-count {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tg-toolbar-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.tg-list {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+  max-height: 340px;
+  overflow-y: auto;
+  text-align: left;
+}
+
+.tg-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s;
+  font: inherit;
+  color: var(--text);
+}
+
+.tg-row:last-child {
+  border-bottom: 0;
+}
+
+.tg-row:hover {
+  background: var(--surface-hover);
+}
+
+.tg-row[data-on="true"] {
+  background: oklch(from var(--accent) l c h / 0.05);
+}
+
+[data-theme="dark"] .tg-row[data-on="true"] {
+  background: oklch(from var(--accent) l c h / 0.1);
+}
+
+.tg-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--bg-sunken);
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.tg-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.tg-name {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.tg-meta {
+  font-size: 12px;
+  color: var(--text-faint);
+  margin-top: 1px;
+}
+
+.checkbox-large {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1.5px solid var(--border-strong);
+  display: grid;
+  place-items: center;
+  background: var(--surface);
+  color: white;
+  flex-shrink: 0;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.tg-row[data-on="true"] .checkbox-large {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.checkbox-corner {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+}
+
+/* ── Courses screen ───────────────────────────────────── */
+
+.course-grid-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.show-archived {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.show-archived input {
+  accent-color: var(--accent);
+}
+
+.course-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+@media (max-width: 600px) {
+  .course-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.course-card {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s, transform 0.1s;
+  font: inherit;
+  color: var(--text);
+}
+
+.course-card:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+}
+
+.course-card:active {
+  transform: scale(0.99);
+}
+
+.course-card[data-on="true"] {
+  border-color: var(--accent);
+  background: oklch(from var(--accent) l c h / 0.04);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+
+[data-theme="dark"] .course-card[data-on="true"] {
+  background: oklch(from var(--accent) l c h / 0.1);
+}
+
+.course-card[data-on="true"] .checkbox-large {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.course-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  padding-right: 28px;
+}
+
+.course-card-tint {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.course-card-code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.course-card-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  line-height: 1.35;
+}
+
+/* ── Preferences screen ───────────────────────────────── */
+
+.prefs-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.pref-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
+}
+
+.pref-row:first-child {
+  border-top: 0;
+}
+
+.pref-row-label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.pref-row-sub {
+  font-size: 12px;
+  color: var(--text-faint);
+  margin-top: 2px;
+}
+
+.pref-segmented {
+  display: inline-flex;
+  background: var(--bg-sunken);
+  border-radius: var(--radius-sm);
+  padding: 3px;
+  gap: 2px;
+}
+
+.pref-segmented button {
+  border: 0;
+  background: transparent;
+  padding: 5px 12px;
+  border-radius: 5px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  font-weight: 500;
+  cursor: pointer;
+  font: inherit;
+}
+
+.pref-segmented button[data-on="true"] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 2px oklch(0 0 0 / 0.06), 0 0 0 1px var(--border);
+}
+
+/* Onboarding cards that need a non-narrow width */
+.onboarding-card {
+  text-align: center;
+}
+
+.onboarding-card .pref-row,
+.onboarding-card .tg-toolbar,
+.onboarding-card .course-grid-toolbar {
+  text-align: left;
+}
+
+/* ── Teams login modal extras ─────────────────────────
+   Phase chip stepper, sub-status microcopy, canvas skeleton, and
+   per-error retry panel. All scoped to the .teams-login-modal so they
+   don't accidentally style other auth modals. */
+
+.teams-login-modal {
+  max-width: 540px;
+}
+
+.teams-login-substatus {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+
+.teams-login-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 4px;
+}
+
+.teams-login-chip {
+  flex: 1;
+  text-align: center;
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-soft);
+  color: var(--text-faint);
+  letter-spacing: 0.01em;
+  transition: background 180ms ease, color 180ms ease, border-color 180ms ease;
+}
+
+.teams-login-chip[data-state="active"] {
+  background: oklch(from var(--accent) l c h / 0.12);
+  border-color: oklch(from var(--accent) l c h / 0.45);
+  color: var(--accent);
+}
+
+.teams-login-chip[data-state="done"] {
+  background: oklch(from var(--green) l c h / 0.1);
+  border-color: oklch(from var(--green) l c h / 0.45);
+  color: var(--green);
+}
+
+[data-theme="dark"] .teams-login-chip[data-state="done"] {
+  color: oklch(0.85 0.13 155);
+}
+
+/* ── Canvas skeleton (pre-first-frame) ─────────────── */
+
+.teams-login-skeleton {
+  position: absolute;
+  inset: 0;
+  background: oklch(0.12 0 0);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 40px 32px;
+  pointer-events: none;
+}
+
+.teams-login-skeleton-bar {
+  background: linear-gradient(
+    90deg,
+    oklch(0.18 0 0) 0%,
+    oklch(0.26 0 0) 50%,
+    oklch(0.18 0 0) 100%
+  );
+  background-size: 200% 100%;
+  border-radius: 4px;
+  animation: teams-skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
+.teams-login-skeleton-bar--logo {
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+
+.teams-login-skeleton-bar--title {
+  width: 70%;
+  height: 18px;
+}
+
+.teams-login-skeleton-bar--field {
+  width: 90%;
+  height: 36px;
+  border-radius: 6px;
+  margin-top: 12px;
+}
+
+.teams-login-skeleton-bar--button {
+  width: 50%;
+  height: 32px;
+  border-radius: 6px;
+  margin-top: 8px;
+}
+
+@keyframes teams-skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.teams-login-skeleton-hint {
+  margin: 14px 0 0;
+  font-size: 12px;
+  color: oklch(0.7 0 0);
+  text-align: center;
+  animation: teams-skeleton-fade-in 280ms ease-out;
+}
+
+@keyframes teams-skeleton-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Error / retry panel ─────────────────────────────── */
+
+.teams-login-error {
+  margin: 0;
+  padding: 14px 16px;
+  background: var(--red-soft);
+  border: 1px solid oklch(from var(--red) l c h / 0.35);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.teams-login-error-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--red);
+}
+
+.teams-login-error-body {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text);
+  line-height: 1.45;
+}

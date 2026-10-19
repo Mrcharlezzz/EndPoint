@@ -1,0 +1,45 @@
+/* Logs page-specific styles */
+
+.logs-root {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.page-tabs .tab[data-state='active'] {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.logs-card {
+  min-height: 0;
+}
+
+.logs-table-meta {
+  padding: 10px 16px 0;
+}
+
+.processor-errors-table td.processor-errors-message,
+.daemon-logs-table td.daemon-logs-context,
+.daemon-logs-table td.daemon-logs-event {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.processor-errors-table td.processor-errors-message {
+  min-width: 320px;
+  line-height: 1.45;
+}
+
+.daemon-logs-table td.daemon-logs-context,
+.daemon-logs-table td.daemon-logs-event {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  line-height: 1.45;
+}
+
+.daemon-logs-table td.daemon-logs-context {
+  color: var(--text-3);
+}

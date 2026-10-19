@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "processor"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "db-core",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "openai>=1.0",
+    "structlog>=24.0",
+    "python-Levenshtein>=0.25",
+    "rapidfuzz>=3.14.3",
+    "langsmith>=0.7.24",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pyright>=1.1.407",
+    "pytest>=8.0",
+    "pytest-django>=4.8",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["processing*", "evaluation*"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+markers = [
+    "llm_live: manual smoke test that calls a real LLM endpoint and emits LangSmith traces",
+]
+
+[tool.uv.sources]
+db-core = { path = "../common/db_core", editable = true }
+
+[tool.pyright]
+include = ["processing", "evaluation"]
+extraPaths = ["../common/db_core"]

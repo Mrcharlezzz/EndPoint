@@ -1,0 +1,50 @@
+# syntax=docker/dockerfile:1.6
+#
+# Headless Teams auth server. Runs the FastAPI app from
+# src/ingestion/ingestion/headless that drives a headless Chromium
+# session via Playwright, streams JPEG frames over a WebSocket, and
+# exposes an internal-secret-protected endpoint for the backend to
+# pull captured tokens server-to-server.
+#
+#   docker build -f docker/Dockerfile.headless -t endpoint/headless .
+#   docker compose up headless
+
+ARG PYTHON_VERSION=3.12
+FROM python:${PYTHON_VERSION}-slim AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    UV_LINK_MODE=copy \
+    UV_COMPILE_BYTECODE=1 \
+    PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates tini \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /usr/local/bin/uv
+
+WORKDIR /app
+
+COPY src/common/db_core/pyproject.toml /app/src/common/db_core/pyproject.toml
+COPY src/ingestion/pyproject.toml       /app/src/ingestion/pyproject.toml
+COPY src/ingestion/uv.lock              /app/src/ingestion/uv.lock
+
+COPY src/common/db_core /app/src/common/db_core
+COPY src/ingestion      /app/src/ingestion
+
+WORKDIR /app/src/ingestion
+
+RUN uv sync --frozen --extra daemon --no-dev
+
+# Install Chromium and its OS dependencies. --with-deps pulls the
+# right apt packages for the slim base image.
+RUN uv run playwright install --with-deps chromium
+
+ENV PATH="/app/src/ingestion/.venv/bin:${PATH}"
+
+EXPOSE 8000
+
+ENTRYPOINT ["tini", "--"]
+CMD ["python", "-m", "ingestion.headless"]

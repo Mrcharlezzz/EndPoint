@@ -1,0 +1,105 @@
+# Prod-shaped overrides. Apply explicitly, which also skips the dev
+# override (compose only auto-loads docker-compose.override.yml when the
+# -f chain is absent):
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+#                  --profile prod up -d --wait
+#
+# TLS termination is an operator concern; put Caddy/nginx/Cloudflare in
+# front of this stack rather than adding certs here.
+
+services:
+  daemon:
+    restart: unless-stopped
+    read_only: true
+    environment:
+      ENDPOINT_DAEMON__INGESTION_CONTROLS__RECENCY_DAYS: ${ENDPOINT_DAEMON__INGESTION_CONTROLS__RECENCY_DAYS:-90}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+  dashboard:
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
+  migrate-presentation-api:
+    image: endpoint/presentation-api
+    env_file: .env
+    environment:
+      PG_HOST: db
+      PG_PORT: "5432"
+      SECRET_KEY: '${PRESENTATION_API_SECRET_KEY:?PRESENTATION_API_SECRET_KEY must be set in .env (run python -c "import secrets; print(secrets.token_urlsafe(50))")}'
+      DEBUG: ${PRESENTATION_API_DEBUG:-False}
+      ALLOWED_HOSTS: ${PRESENTATION_API_ALLOWED_HOSTS:-localhost,127.0.0.1,presentation-api}
+      CORS_ALLOWED_ORIGINS: ${PRESENTATION_API_CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      SESSION_TTL_HOURS: ${PRESENTATION_API_SESSION_TTL_HOURS:-24}
+      MS_GRAPH_BASE_URL: ${PRESENTATION_API_MS_GRAPH_BASE_URL:-https://graph.microsoft.com/v1.0}
+      HEADLESS_INTERNAL_URL: http://headless:8000
+      ENDPOINT_HEADLESS__INTERNAL_SECRET: ${ENDPOINT_HEADLESS__INTERNAL_SECRET:?ENDPOINT_HEADLESS__INTERNAL_SECRET must be set}
+    working_dir: /app
+    command: ["python", "manage.py", "migrate", "--noinput"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  import-production-seed:
+    image: endpoint/ingestor
+    profiles: ["seed-import"]
+    env_file: .env
+    environment:
+      PG_HOST: db
+      PG_PORT: "5432"
+      ENDPOINT_DAEMON__SQLITE_PATH: /var/lib/ingestor/state.db
+      PRODUCTION_SEED_DIR: /seeds
+    working_dir: /app/src/ingestion
+    command: ["bash", "scripts/compose_import_production_seed.sh"]
+    volumes:
+      - ./data/seeds/production:/seeds:ro
+      - ingestor_state:/var/lib/ingestor
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      migrate-presentation-api:
+        condition: service_completed_successfully
+    restart: "no"
+
+  bootstrap-telegram-credential:
+    image: endpoint/ingestor
+    profiles: ["telegram-bootstrap"]
+    env_file:
+      - .env
+      - ${TELEGRAM_BOOTSTRAP_ENV_FILE:-.env.telegram-bootstrap}
+    environment:
+      PG_HOST: db
+      PG_PORT: "5432"
+    working_dir: /app/src/ingestion
+    command: ["uv", "run", "python", "scripts/bootstrap_telegram_credential.py"]
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
+  # Seed is a dev-only convenience. Moving it to a profile nobody runs
+  # keeps it out of prod even if someone fat-fingers `--profile e2e`
+  # here.
+  seed:
+    profiles: ["never"]

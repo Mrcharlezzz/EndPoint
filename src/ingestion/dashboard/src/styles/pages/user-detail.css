@@ -1,0 +1,270 @@
+/* user-detail page-specific styles */
+
+.user-detail-header {
+  padding: var(--sp-4) var(--sp-5);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+
+.ud-h-main {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+.ud-back {
+  padding-inline: var(--sp-2);
+}
+
+.ud-back-label {
+  margin-left: 4px;
+}
+
+.ud-ident {
+  gap: 0;
+  min-width: 0;
+}
+
+.ud-email {
+  font-size: 14px;
+}
+
+.ud-tabbar-wrap {
+  padding: var(--sp-3) var(--sp-5);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+
+.ud-tabs {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+.ud-tabcontent {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--sp-4) var(--sp-5);
+}
+
+.ud-pad {
+  padding: var(--sp-4);
+}
+
+/* overview */
+
+.ud-overview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.ud-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  gap: var(--sp-3);
+}
+
+.ud-dual {
+  gap: var(--sp-4);
+}
+
+.ud-sync-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.ud-sync-row {
+  display: grid;
+  grid-template-columns: 80px 90px 1fr 70px;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border-subtle, var(--border));
+}
+
+.ud-sync-row:last-child {
+  border-bottom: none;
+}
+
+.ud-sync-when {
+  text-align: right;
+}
+
+.ud-sync-id {
+  text-align: right;
+  color: var(--muted);
+}
+
+.ud-cursor-block {
+  margin-bottom: var(--sp-3);
+}
+
+.ud-cursor-head {
+  margin-bottom: 4px;
+}
+
+/* credentials */
+
+.ud-creds {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--sp-4);
+}
+
+.ud-cred-card {
+  min-width: 0;
+}
+
+.ud-cred-actions {
+  margin-top: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+/* tables (sync history + contributions) */
+
+.ud-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.ud-table thead th {
+  text-align: left;
+  padding: 8px var(--sp-3);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.ud-table tbody td {
+  padding: 8px var(--sp-3);
+  border-bottom: 1px solid var(--border-subtle, var(--border));
+  vertical-align: middle;
+}
+
+.ud-table tbody tr:hover {
+  background: color-mix(in oklab, var(--accent) 4%, transparent);
+}
+
+.ud-table tbody tr.selected {
+  background: color-mix(in oklab, var(--accent) 10%, transparent);
+}
+
+.ud-syncs,
+.ud-contrib {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 460px;
+  gap: var(--sp-4);
+  align-items: start;
+  min-height: 0;
+}
+
+.ud-syncs-tablewrap,
+.ud-contrib-tablewrap {
+  overflow: auto;
+  min-width: 0;
+}
+
+.ud-drawer {
+  position: sticky;
+  top: 0;
+}
+
+.ud-json {
+  background: var(--surface-elev, #0e0e10);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.4;
+  overflow: auto;
+  max-height: 40vh;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* errors list */
+
+.ud-err-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.ud-err-row {
+  display: grid;
+  grid-template-columns: 80px 90px 140px 1fr 80px;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 6px var(--sp-2);
+  border-bottom: 1px solid var(--border-subtle, var(--border));
+}
+
+.ud-err-msg {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ud-err-when {
+  text-align: right;
+}
+
+/* audit list */
+
+.ud-audit-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.ud-audit-row {
+  padding: 8px var(--sp-2);
+  border-bottom: 1px solid var(--border-subtle, var(--border));
+}
+
+.ud-audit-reason {
+  color: var(--muted);
+  margin-top: 4px;
+  margin-left: var(--sp-2);
+}
+
+@media (max-width: 1100px) {
+  .ud-syncs,
+  .ud-contrib {
+    grid-template-columns: 1fr;
+  }
+  .ud-drawer {
+    position: static;
+  }
+  .ud-kpi-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .ud-err-row {
+    grid-template-columns: 70px 80px 1fr 60px;
+  }
+}

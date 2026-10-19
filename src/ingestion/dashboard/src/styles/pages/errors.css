@@ -1,0 +1,183 @@
+/* errors page-specific styles */
+
+/* Slim red outline marks GlitchTip as the "go-off-property" destination. */
+.btn.errors-gt-link,
+.btn.errors-gt-deep {
+  border: 1px solid var(--err);
+  color: var(--err);
+}
+.btn.errors-gt-link:hover,
+.btn.errors-gt-deep:hover {
+  background: color-mix(in oklab, var(--err) 10%, transparent);
+}
+
+.errors-gt-link {
+  margin-left: var(--sp-2);
+}
+
+.errors-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 460px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.errors-left {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--border);
+}
+
+.errors-filterbar {
+  padding: var(--sp-4) var(--sp-5);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.errors-search {
+  flex: 0 1 320px;
+  min-width: 260px;
+}
+
+.errors-tablewrap {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+
+.errors-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.errors-table thead th {
+  text-align: left;
+  padding: 8px var(--sp-3);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.errors-table tbody td {
+  padding: 8px var(--sp-3);
+  border-bottom: 1px solid var(--border-subtle, var(--border));
+  vertical-align: middle;
+}
+
+.errors-table tbody tr:hover {
+  background: color-mix(in oklab, var(--accent) 4%, transparent);
+}
+
+.errors-table tbody tr.selected {
+  background: color-mix(in oklab, var(--accent) 10%, transparent);
+}
+
+.errors-detail {
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.errors-pre {
+  background: var(--surface-elev, #0e0e10);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.4;
+  overflow: auto;
+  max-height: 40vh;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.errors-actions {
+  flex-wrap: wrap;
+}
+
+/* Drawer header chrome: make the title's inner fragment a full-width
+   flex row so close / kind / platform / GlitchTip space themselves out
+   instead of clumping at the left. */
+.errors-drawer .drawer-h .title-row {
+  width: 100%;
+}
+
+.errors-drawer .drawer-h .title-row .id {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--sp-3);
+  justify-content: space-between;
+}
+
+/* Drawer: 4-col metadata grid sits inside the header's subtitle slot so
+   it reads as one unified header region with the GlitchTip button row. */
+.errors-dr-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--sp-4);
+  margin-top: var(--sp-3);
+}
+
+.errors-dr-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.errors-dr-field.full {
+  grid-column: 1 / -1;
+}
+
+.errors-dr-field .k {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.errors-dr-field .v {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.errors-dr-actions {
+  margin-top: var(--sp-4);
+  padding: var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: color-mix(in oklab, var(--surface) 92%, transparent);
+}
+
+.errors-dr-actions .drawer-section-h {
+  margin-top: 0;
+  margin-bottom: var(--sp-3);
+}
+
+@media (max-width: 1100px) {
+  .errors-split {
+    grid-template-columns: 1fr;
+  }
+}

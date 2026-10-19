@@ -1,0 +1,53 @@
+# Build-context exclusions for the root dockerfiles
+# (ingestor, processor, headless — context is the repo root).
+# Without this, every build streams hundreds of MB of irrelevant files
+# to the daemon and rebuilds invalidate on noise like .git changes.
+
+.git
+.github
+.gitignore
+
+# Python virtualenvs and bytecode
+.venv
+**/.venv
+**/__pycache__
+**/*.py[cod]
+**/*$py.class
+**/.ruff_cache
+**/.pytest_cache
+**/htmlcov
+**/.coverage*
+**/*.egg-info
+
+# Node
+**/node_modules
+**/.next
+**/out
+**/.turbo
+
+# IDE / OS
+.vscode
+.idea
+.DS_Store
+**/.DS_Store
+
+# Local dev state and secrets
+.env
+.env.*
+!.env.example
+.claude
+.conduct
+.orchestrator
+
+# Logs and ephemera
+**/*.log
+**/logs
+!src/ingestion/dashboard/src/routes/logs
+!src/ingestion/dashboard/src/routes/logs/**
+**/test-results
+**/playwright-report
+
+# Docs are not needed at runtime
+docs
+*.md
+!README.md

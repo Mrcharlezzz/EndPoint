@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Endpoint — Teams Login</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+      background: #0a0a0a; color: #e0e0e0;
+      min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+      padding: 1rem;
+    }
+    h1 { font-size: 1.2rem; font-weight: 600; margin-bottom: 1rem; color: #fff; }
+
+    .toolbar { display: flex; gap: 0.8rem; margin-bottom: 1rem; align-items: center; }
+    button {
+      background: #1a73e8; color: #fff; border: none; padding: 0.5rem 1.2rem;
+      border-radius: 4px; font-size: 0.85rem; cursor: pointer; font-family: inherit;
+    }
+    button:hover { background: #1557b0; }
+    button:disabled { background: #333; color: #666; cursor: not-allowed; }
+    button.danger { background: #c0392b; }
+    button.danger:hover { background: #96281b; }
+    .status { font-size: 0.8rem; color: #888; }
+    .status.waiting { color: #f1c40f; }
+    .status.captured { color: #2ecc71; }
+    .status.failed { color: #e74c3c; }
+
+      .screen-wrap {
+      display: none; border: 1px solid #222; border-radius: 6px;
+      overflow: hidden; background: #111; position: relative;
+      width: 100%; max-width: 480px; touch-action: none;
+    }
+    .screen-wrap.active { display: block; }
+    #screen {
+      display: block; width: 100%; height: auto;
+      cursor: default; image-rendering: auto;
+    }
+
+    .collecting-overlay {
+      display: none; position: absolute; inset: 0;
+      background: rgba(10, 10, 10, 0.92);
+      flex-direction: column; align-items: center; justify-content: center;
+      gap: 1rem; z-index: 10;
+    }
+    .collecting-overlay.active { display: flex; }
+    .collecting-overlay .spinner {
+      width: 32px; height: 32px; border: 3px solid #333;
+      border-top-color: #1a73e8; border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .collecting-overlay p {
+      font-size: 0.95rem; color: #ccc; text-align: center;
+    }
+
+    /* Hidden input to trigger mobile keyboard — stays inside container to avoid scroll */
+    #kb-input {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      opacity: 0; font-size: 16px; z-index: 5; pointer-events: none;
+      border: none; outline: none; background: transparent;
+    }
+
+    .results {
+      display: none; margin-top: 1.5rem; padding: 1rem; width: 100%; max-width: 480px;
+      background: #111; border: 1px solid #1a73e8; border-radius: 6px;
+    }
+    .results.active { display: block; }
+    .results h2 { font-size: 1rem; color: #2ecc71; margin-bottom: 0.6rem; }
+    .token-row { margin-bottom: 0.5rem; }
+    .token-label { font-size: 0.75rem; color: #888; }
+    .token-value {
+      font-family: "SF Mono", monospace; font-size: 0.7rem; color: #aaa;
+      background: #0a0a0a; padding: 0.3rem 0.5rem; border-radius: 3px;
+      word-break: break-all; border: 1px solid #222; cursor: pointer;
+    }
+    .teams-list { margin-top: 0.4rem; font-size: 0.75rem; color: #888; }
+    .teams-list span {
+      display: inline-block; background: #1a1a2e; padding: 0.15rem 0.4rem;
+      border-radius: 3px; margin: 0.1rem; color: #aaa;
+    }
+  </style>
+</head>
+<body>
+  <h1>Endpoint &mdash; Teams Login</h1>
+
+  <div class="toolbar">
+    <button id="start-btn" onclick="startLogin()">Connect Teams</button>
+    <button id="stop-btn" class="danger" onclick="stopSession()" disabled>Stop</button>
+    <span class="status" id="status">idle</span>
+  </div>
+
+  <div class="screen-wrap" id="screen-wrap">
+    <canvas id="screen" width="460" height="640"></canvas>
+    <input id="kb-input" type="text" autocomplete="off" autocapitalize="off"
+           autocorrect="off" spellcheck="false" inputmode="text">
+    <div class="collecting-overlay" id="collecting-overlay">
+      <div class="spinner"></div>
+      <p>We are getting your tokens, hang on :)</p>
+    </div>
+  </div>
+
+  <div class="results" id="results">
+    <h2>Tokens Captured</h2>
+    <p id="results-msg" style="font-size: 0.85rem; color: #aaa;">
+      Sign-in complete. Your backend has been notified — you can close this tab.
+    </p>
+  </div>
+
+<script>
+let sid = null, ws = null, pollId = null;
+const canvas = document.getElementById("screen");
+const ctx = canvas.getContext("2d");
+const kbInput = document.getElementById("kb-input");
+
+// ── Start ──────────────────────────────────────────────
+async function startLogin() {
+  document.getElementById("start-btn").disabled = true;
+  document.getElementById("stop-btn").disabled = false;
+  document.getElementById("results").classList.remove("active");
+  setStatus("starting...", "waiting");
+
+  try {
+    const r = await fetch("/auth/teams/start", { method: "POST" });
+    if (!r.ok) { const e = await r.json(); throw new Error(e.detail); }
+    const data = await r.json();
+    sid = data.session_id;
+
+    document.getElementById("screen-wrap").classList.add("active");
+    connectWS();
+    pollId = setInterval(pollSession, 2000);
+    setStatus("waiting for login...", "waiting");
+  } catch (e) {
+    setStatus("error: " + e.message, "failed");
+    document.getElementById("start-btn").disabled = false;
+    document.getElementById("stop-btn").disabled = true;
+  }
+}
+
+// ── WebSocket ──────────────────────────────────────────
+function connectWS() {
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  ws = new WebSocket(`${proto}://${location.host}/auth/teams/${sid}/ws`);
+  ws.binaryType = "blob";
+
+  ws.onmessage = (e) => {
+    createImageBitmap(e.data).then((bmp) => {
+      if (canvas.width !== bmp.width || canvas.height !== bmp.height) {
+        canvas.width = bmp.width;
+        canvas.height = bmp.height;
+      }
+      ctx.drawImage(bmp, 0, 0);
+      bmp.close();
+    });
+  };
+
+  ws.onclose = () => { ws = null; };
+}
+
+function send(obj) {
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
+}
+
+// ── Input: click / touch ───────────────────────────────
+function canvasXY(clientX, clientY) {
+  const r = canvas.getBoundingClientRect();
+  return {
+    x: Math.round((clientX - r.left) * canvas.width / r.width),
+    y: Math.round((clientY - r.top) * canvas.height / r.height),
+  };
+}
+
+canvas.addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  const { x, y } = canvasXY(e.clientX, e.clientY);
+  send({ type: "click", x, y });
+  kbInput.focus({ preventScroll: true });
+});
+
+// ── Input: keyboard via hidden input ───────────────────
+kbInput.addEventListener("input", (e) => {
+  const text = e.data;
+  if (text) send({ type: "type", text });
+  kbInput.value = "";
+});
+
+kbInput.addEventListener("keydown", (e) => {
+  const special = ["Backspace", "Enter", "Tab", "Escape", "ArrowLeft",
+                    "ArrowRight", "ArrowUp", "ArrowDown", "Delete"];
+  if (special.includes(e.key)) {
+    e.preventDefault();
+    send({ type: "press", key: e.key });
+  }
+});
+
+// ── Poll ───────────────────────────────────────────────
+async function pollSession() {
+  if (!sid) return;
+  try {
+    const r = await fetch(`/auth/teams/${sid}`);
+    const d = await r.json();
+    if (d.status === "collecting") {
+      document.getElementById("collecting-overlay").classList.add("active");
+      setStatus("collecting tokens...", "waiting");
+    } else if (d.status === "waiting") {
+      document.getElementById("collecting-overlay").classList.remove("active");
+      setStatus("waiting for login...", "waiting");
+    } else if (d.status === "captured") {
+      done(); showResults();
+      setStatus("tokens captured", "captured");
+    } else if (d.status === "failed") {
+      done();
+      setStatus("failed: " + (d.error || "unknown"), "failed");
+    }
+  } catch (_) {}
+}
+
+function done() {
+  clearInterval(pollId); pollId = null;
+  if (ws) { ws.close(); ws = null; }
+  document.getElementById("screen-wrap").classList.remove("active");
+  document.getElementById("collecting-overlay").classList.remove("active");
+  document.getElementById("start-btn").disabled = false;
+  document.getElementById("stop-btn").disabled = true;
+}
+
+// ── Stop ───────────────────────────────────────────────
+async function stopSession() {
+  if (!sid) return;
+  done();
+  try { await fetch(`/auth/teams/${sid}`, { method: "DELETE" }); } catch (_) {}
+  setStatus("stopped", "");
+  sid = null;
+}
+
+// ── Results ────────────────────────────────────────────
+// Token values are intentionally not surfaced to the browser — the
+// backend pulls them over the loopback /internal endpoint instead.
+function showResults() {
+  document.getElementById("results").classList.add("active");
+}
+
+function setStatus(text, cls) {
+  const el = document.getElementById("status");
+  el.textContent = text; el.className = "status " + (cls || "");
+}
+</script>
+</body>
+</html>

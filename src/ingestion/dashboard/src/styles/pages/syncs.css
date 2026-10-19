@@ -1,0 +1,49 @@
+/* Syncs page-specific styles */
+
+.syncs-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 480px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.syncs-left {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--border);
+}
+
+.syncs-filterbar {
+  padding: var(--sp-4) var(--sp-5);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.syncs-search {
+  flex: 0 1 320px;
+  min-width: 260px;
+}
+
+/* Pill row gets its own row on wrap; more breathing room between groups. */
+.syncs-filterbar .filter-row {
+  gap: var(--sp-3);
+}
+
+.syncs-tablewrap {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+
+.syncs-drawer {
+  min-width: 0;
+  overflow: hidden;
+}

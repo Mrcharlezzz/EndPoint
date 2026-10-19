@@ -1,0 +1,17 @@
+.venv
+__pycache__
+*.py[cod]
+*$py.class
+.ruff_cache
+.pytest_cache
+htmlcov
+.coverage*
+*.egg-info
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+docker-compose.yml
+*.md
+.DS_Store

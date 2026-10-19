@@ -1,0 +1,34 @@
+[project]
+name = "db-core"
+version = "0.1.0"
+description = "Shared database schema package for the Endpoint project"
+requires-python = ">=3.12"
+dependencies = [
+    "django>=5.1,<6",
+    "psycopg2-binary>=2.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-django>=4.8",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["config*", "core*"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+python_files = ["test_*.py", "*_test.py"]
+
+[tool.ruff]
+extend-exclude = ["core/migrations"]
+
+[tool.pyright]
+reportAttributeAccessIssue = false
+reportIncompatibleVariableOverride = false
+reportArgumentType = false

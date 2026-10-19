@@ -1,0 +1,199 @@
+/* Global button system. Imported from globals.css so every route sees the
+   rules — Next splits route-scoped CSS into chunks, so anything we want
+   shared across the app (auth, settings, dashboard, onboarding) has to
+   live in a CSS file imported from a layout that all routes pass through. */
+
+/* ── Primary ─────────────────────────────────────────── */
+
+.btn-primary {
+  appearance: none;
+  background: var(--accent);
+  color: var(--accent-fg);
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: filter 120ms ease;
+  white-space: nowrap;
+}
+
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+.btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ── Secondary ───────────────────────────────────────── */
+
+.btn-secondary {
+  appearance: none;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+  white-space: nowrap;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: var(--text-faint);
+}
+
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Outlined destructive — for Delete account, Disconnect, etc., where
+   filled red would feel too aggressive next to secondary buttons. */
+.btn-secondary--danger {
+  color: var(--red);
+  border-color: oklch(from var(--red) l c h / 0.45);
+}
+
+.btn-secondary--danger:hover:not(:disabled) {
+  background: var(--red-soft);
+  border-color: var(--red);
+  color: var(--red);
+}
+
+/* ── Filled destructive (confirm dialogs only) ───────── */
+
+.btn-danger {
+  appearance: none;
+  background: var(--red);
+  color: white;
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: filter 120ms ease;
+  white-space: nowrap;
+}
+
+.btn-danger:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+.btn-danger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ── Text-style (low emphasis) ───────────────────────── */
+
+.btn-text {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--radius-sm);
+  transition: background 120ms ease, color 120ms ease;
+  white-space: nowrap;
+}
+
+.btn-text:hover:not(:disabled) {
+  background: var(--bg-sunken);
+  color: var(--text);
+}
+
+.btn-text:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Ghost (used in onboarding "Back" / "Exit setup") ── */
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--bg-sunken);
+  color: var(--text);
+}
+
+.btn-ghost:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-ghost-sm {
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-ghost-sm:hover {
+  background: var(--bg-sunken);
+  color: var(--text);
+}
+
+/* ── Size + emphasis modifiers ───────────────────────── */
+
+.btn-large {
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* Smaller, denser variant for inline row actions in settings. */
+.btn-sm {
+  padding: 5px 10px;
+  font-size: 12.5px;
+  border-radius: 5px;
+  gap: 5px;
+}
+
+.btn-sm svg {
+  width: 13px;
+  height: 13px;
+}

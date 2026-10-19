@@ -1,0 +1,90 @@
+# Dev-only overrides, auto-loaded by `docker compose up`. Skipped when
+# an explicit `-f` chain is passed (e.g. the prod invocation documented
+# in docs/DEPLOYMENT.md).
+
+services:
+  daemon:
+    environment:
+      ENDPOINT_DAEMON__LOG_LEVEL: DEBUG
+    # Read-only source bind so edits to the Python package take effect
+    # on `docker compose restart daemon` without a rebuild. The rest of
+    # /app stays as the image built it (.venv, uv.lock, etc).
+    volumes:
+      - ./src/ingestion/ingestion:/app/src/ingestion/ingestion:ro
+    depends_on:
+      seed-post-process-snapshot:
+        condition: service_completed_successfully
+      import-cli-tokens:
+        condition: service_completed_successfully
+  processor:
+    command: python main_dev.py
+    depends_on:
+      seed-post-process-snapshot:
+        condition: service_completed_successfully
+
+  headless:
+    depends_on:
+      seed-post-process-snapshot:
+        condition: service_completed_successfully
+
+  presentation-api:
+    depends_on:
+      seed-post-process-snapshot:
+        condition: service_completed_successfully
+
+  frontend:
+    depends_on:
+      seed-post-process-snapshot:
+        condition: service_completed_successfully
+
+  # Dev-only action: restore the latest post-process snapshot into the
+  # shared db before the rest of the dev stack starts.
+  seed-post-process-snapshot:
+    image: postgres:16-alpine
+    env_file: .env
+    volumes:
+      - ./data/snapshots/post-process:/snapshots:ro
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        if [ -n "$${ENDPOINT_DEV_SEED_SNAPSHOT:-}" ]; then
+          case "$$ENDPOINT_DEV_SEED_SNAPSHOT" in
+            */*|..*) echo "Snapshot override must be a filename under /snapshots" >&2; exit 1 ;;
+          esac
+          snapshot="/snapshots/$$ENDPOINT_DEV_SEED_SNAPSHOT"
+          if [ ! -f "$$snapshot" ]; then
+            echo "Requested post-process snapshot not found: $$snapshot" >&2
+            exit 1
+          fi
+        else
+          snapshot="$$(find /snapshots -maxdepth 1 -type f -name '*.sql.gz' | sort | tail -n 1)"
+        fi
+        if [ -z "$$snapshot" ]; then
+          echo "No post-process snapshots found under /snapshots" >&2
+          exit 1
+        fi
+        export PGPASSWORD="$$POSTGRES_PASSWORD"
+        echo "Restoring post-process snapshot: $$snapshot"
+        psql -h db -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -v ON_ERROR_STOP=1 -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+        gzip -dc "$$snapshot" | psql -h db -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -v ON_ERROR_STOP=1
+        echo "Restore complete: $$snapshot"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  # Dev-only action: import local CLI credentials into PlatformCredential
+  # after the snapshot restore so daemon/headless flows can use real tokens.
+  import-cli-tokens:
+    image: endpoint/ingestor
+    user: "0:0"
+    env_file: .env
+    environment:
+      PG_HOST: db
+      PG_PORT: "5432"
+    working_dir: /app/src/ingestion
+    command: ["uv", "run", "python", "scripts/import_cli_tokens.py", "--credentials", "/tmp/credentials.json"]
+    volumes:
+      - ${HOME}/.config/ingest/credentials.json:/tmp/credentials.json:ro
+    restart: "no"

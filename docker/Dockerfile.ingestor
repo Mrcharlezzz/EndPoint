@@ -1,0 +1,158 @@
+# syntax=docker/dockerfile:1.6
+#
+# Build context is the repo root. Copies both src/common/db_core (the shared
+# ORM schema package) and src/ingestion (this component) so uv can resolve
+# the db-core path dep declared in src/ingestion/pyproject.toml.
+#
+#   docker build -f docker/Dockerfile.ingestor -t endpoint/ingestor .
+#   docker compose up ingestor
+#
+# Build-time metadata. Pass these via `--build-arg` from CI so /v1/about
+# can surface them at runtime. Default to "unknown" so a local `docker
+# build` without args still produces a runnable image rather than a
+# crashing one — operators see "unknown" and know they need to wire CI
+# tagging up. Slice 14 part B.
+ARG ENDPOINT_VERSION=unknown
+ARG ENDPOINT_GIT_SHA=unknown
+ARG ENDPOINT_BUILT_AT=unknown
+
+ARG PYTHON_VERSION=3.12
+FROM python:${PYTHON_VERSION}-slim AS base
+
+# Re-declare ARGs after FROM so they're visible inside this stage. Docker
+# doesn't carry global ARGs across stage boundaries unless re-declared.
+ARG ENDPOINT_VERSION
+ARG ENDPOINT_GIT_SHA
+ARG ENDPOINT_BUILT_AT
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    UV_LINK_MODE=copy \
+    UV_COMPILE_BYTECODE=1 \
+    ENDPOINT_VERSION=${ENDPOINT_VERSION} \
+    ENDPOINT_GIT_SHA=${ENDPOINT_GIT_SHA} \
+    ENDPOINT_BUILT_AT=${ENDPOINT_BUILT_AT}
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates tini \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /usr/local/bin/uv
+
+# Non-root runtime user. The ingestor process needs to write to the SQLite
+# state directory and Playwright's Chromium cache, both of which we hand
+# ownership of below. Slice 14 part A: a remote-code-execution in any of
+# the daemon's HTTP handlers (or the headless browser) no longer drops the
+# attacker into a container running as root.
+RUN groupadd --system --gid 65532 ingestor \
+    && useradd --system --uid 65532 --gid 65532 \
+        --home-dir /home/ingestor \
+        --create-home \
+        --shell /usr/sbin/nologin \
+        ingestor
+
+WORKDIR /app
+
+# Two-phase install so a code edit doesn't bust the dependency layer.
+#
+# Phase A copies only the manifests + lockfile and stub package dirs, then
+# resolves third-party deps via ``uv sync --no-install-project``. As long as
+# pyproject.toml and uv.lock are unchanged, the entire phase is a cache hit
+# regardless of source edits below. The stub directories exist purely so
+# uv's *editable* install of db-core (path dep, setuptools ``find`` over
+# ``config*``/``core*``) and ingestion (hatch ``packages = ["ingestion"]``)
+# can succeed before the real source is on disk; the COPYs in phase B
+# overwrite them.
+#
+# The BuildKit cache mount on /root/.cache/uv preserves downloaded wheels
+# across builds even when this layer rebuilds (e.g. a dependency bump),
+# so the network step is skipped on subsequent rebuilds.
+COPY src/common/db_core/pyproject.toml /app/src/common/db_core/pyproject.toml
+COPY src/ingestion/pyproject.toml       /app/src/ingestion/pyproject.toml
+COPY src/ingestion/uv.lock              /app/src/ingestion/uv.lock
+
+WORKDIR /app/src/ingestion
+
+RUN mkdir -p /app/src/common/db_core/config \
+             /app/src/common/db_core/core \
+             /app/src/ingestion/ingestion \
+    && touch /app/src/common/db_core/config/__init__.py \
+             /app/src/common/db_core/core/__init__.py \
+             /app/src/ingestion/ingestion/__init__.py
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --extra daemon --no-dev --no-install-project
+
+# Hand the bulk of the venv to ``ingestor`` while we're still on a cached
+# parent. Phase A produced thousands of third-party files owned by root;
+# walking them all takes ~40s. Doing it here means the chown layer's
+# parent chain stays stable across code edits — a tiny follow-up chown
+# after Phase B covers the few new files (project + db-core editable
+# install) without re-walking the whole tree.
+RUN chown -R ingestor:ingestor /app/src/ingestion/.venv
+
+# Playwright Chromium for the Teams refresh loop. ``--with-deps`` pulls in
+# the apt packages Chromium needs (libnss3, fontconfig, etc.); the binaries
+# themselves land under /home/ingestor/.cache/ms-playwright. Without this
+# the refresh loop logs a `BrowserType.launch` error and Teams tokens stop
+# rotating in prod (silent breakage). Image grows by ~500 MB; if Teams is
+# out of scope, set ENDPOINT_DAEMON__TEAMS_REFRESH__ENABLED=false at runtime
+# instead of stripping this layer (then the loop is a no-op).
+#
+# Placed BEFORE the source COPY so this layer's parent chain is the cached
+# Phase A install, not the source-COPY layer that busts on every code edit.
+# ``playwright install`` only needs the ``playwright`` Python package (in
+# the daemon extra, installed by Phase A) — it has no dependency on the
+# ingestion source tree, so the move is safe.
+ENV PLAYWRIGHT_BROWSERS_PATH=/home/ingestor/.cache/ms-playwright
+RUN mkdir -p "${PLAYWRIGHT_BROWSERS_PATH}" \
+    && chown -R ingestor:ingestor /home/ingestor \
+    && uv run --no-sync python -m playwright install --with-deps chromium \
+    && chown -R ingestor:ingestor "${PLAYWRIGHT_BROWSERS_PATH}"
+
+# Phase B: real source lands on top of the populated .venv. The trailing
+# ``uv sync`` installs the ingestion project itself (entry-point scripts,
+# package wiring) without re-resolving third-party deps — typically <2s.
+COPY src/common/db_core /app/src/common/db_core
+COPY src/ingestion      /app/src/ingestion
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --extra daemon --no-dev
+
+# SQLite, logs, and credentials (encrypted) all live under this volume.
+# Owned by the non-root ingestor user so the daemon can write there
+# without dropping CAP_DAC_OVERRIDE-style privileges.
+RUN mkdir -p /var/lib/ingestor \
+    && chown -R ingestor:ingestor /var/lib/ingestor \
+    && chmod 0755 /var/lib/ingestor
+VOLUME ["/var/lib/ingestor"]
+
+# .venv ownership: Phase A's chown above already handed every third-party
+# file to ingestor on a cached parent. Phase B added a handful of new
+# files (the ingestion project + db-core editable install) still owned by
+# root. ``find -not -user ingestor`` walks the tree but only chowns those
+# few stragglers, so this layer stays cheap (~0.5s) even though it
+# cascades on every code edit.
+RUN find /app/src/ingestion/.venv -not -user ingestor -exec chown ingestor:ingestor {} +
+
+ENV PATH="/app/src/ingestion/.venv/bin:${PATH}" \
+    ENDPOINT_DAEMON__SQLITE_PATH=/var/lib/ingestor/state.db
+
+# Liveness check. Hits the daemon's public /v1/health endpoint (slice 5
+# canonical, slice 6 readiness pair) — purely in-process, no DB calls,
+# never auth-gated, so it can't false-flag during a transient SQLite
+# slowdown. ``--start-period`` covers the cold-boot interval where uvicorn
+# is still binding the socket; ``--retries`` lets a brief asyncio stall
+# clear before Docker tags the container unhealthy. Failure here triggers
+# Docker's restart loop (paired with the on-failure restart policy in
+# docker-compose.yml).
+HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=5 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/v1/health', timeout=3).read()" || exit 1
+
+USER ingestor:ingestor
+
+# tini reaps zombies and forwards SIGTERM cleanly to the Python process so the
+# asyncio signal handler fires.
+ENTRYPOINT ["tini", "--"]
+CMD ["python", "-m", "ingestion.daemon"]
