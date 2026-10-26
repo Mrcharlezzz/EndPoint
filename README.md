@@ -23,6 +23,7 @@ orchestration, and production-seed tooling.
 - [Product definition and MVP scope](#product-definition-and-mvp-scope)
 - [Architecture and stack](#architecture-and-stack)
 - [Testing and evaluation](#testing-and-evaluation)
+- [Results](#results)
 - [Presentation and demo](#presentation-and-demo)
 
 ## Problem and proposal
@@ -85,6 +86,28 @@ assignment and event examples for field extraction. The
 evaluation runner
 reports classification F1 and extraction completeness, keeping model-quality
 measurement separate from software tests.
+
+## Results
+
+Endpoint was run on real student accounts at Constructor University.
+
+**Coverage.** [Moodle](docs/ingestion/CONNECTORS.md#moodle) assignments, materials,
+calendar events and forums; [Teams](docs/ingestion/CONNECTORS.md#microsoft-teams)
+assignments and channel messages; Telegram chats.
+
+**Performance.** Connecting Teams takes about 3 seconds after one login. After that,
+tokens [renew silently](src/ingestion/ingestion/auth/silent_oidc.py) in under a
+second, so students don't log in again for about 90 days. Under load, ingestion
+handles 2,160 items/min and the processor 135 items/min, enough to process a busy
+course's whole peak month (~128 messages) in under a minute.
+
+**Cost.** LLM classification costs about **$0.18 per course per month** at peak
+message volume ([model cost benchmark](src/ingestion/scripts/benchmark.py)).
+
+**Evaluation.** On 154 hand-labeled messages from 17 courses
+([dataset](src/processor/evaluation/telegram_llm/README.md)), classification reaches
+**0.83 macro F1** ([scorer](src/processor/evaluation/eval/scorer.py)). Deadlines and
+event times written in plain language are extracted correctly every time.
 
 ## Presentation and demo
 
